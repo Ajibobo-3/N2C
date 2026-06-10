@@ -1,0 +1,89 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { usePrivy } from '@privy-io/react-auth';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
+
+export default function Navbar() {
+  const { ready, authenticated, user, login, logout } = usePrivy();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Log Privy state changes for debugging
+  useEffect(() => {
+    console.log("[Navbar] Privy state:", { ready, authenticated, hasUser: !!user });
+  }, [ready, authenticated, user]);
+
+  const formatAddress = (address: string) => {
+    if (!address) return '';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const handleConnect = useCallback(() => {
+    console.log("[Navbar] Connect Wallet clicked. ready:", ready, "authenticated:", authenticated);
+    try {
+      login();
+    } catch (err) {
+      console.error("[Navbar] login() threw:", err);
+    }
+  }, [ready, authenticated, login]);
+
+  const handleDisconnect = useCallback(() => {
+    console.log("[Navbar] Disconnect clicked");
+    logout();
+  }, [logout]);
+
+  // Don't render anything interactive until client-side mounted
+  if (!mounted) {
+    return (
+      <nav className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-black">
+        <div className="text-xl font-bold tracking-wider text-green-500">N2C On-Ramp</div>
+        <div>
+          <Button disabled className="bg-zinc-900 border-zinc-800 text-zinc-500 w-[160px]">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Loading...
+          </Button>
+        </div>
+      </nav>
+    );
+  }
+
+  return (
+    <nav className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-black">
+      <div className="text-xl font-bold tracking-wider text-green-500">N2C On-Ramp</div>
+      
+      <div>
+        {!ready ? (
+          <Button disabled className="bg-zinc-900 border-zinc-800 text-zinc-500 w-[160px]">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Connecting...
+          </Button>
+        ) : authenticated && user?.wallet?.address ? (
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-zinc-400 font-mono bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-800">
+              {formatAddress(user.wallet.address)}
+            </span>
+            <Button 
+              onClick={handleDisconnect}
+              variant="outline"
+              className="border-zinc-800 text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all duration-200"
+            >
+              Disconnect
+            </Button>
+          </div>
+        ) : (
+          <Button 
+            onClick={handleConnect}
+            className="bg-green-500 text-black hover:bg-green-600 font-semibold shadow-[0_0_15px_rgba(34,197,94,0.2)] hover:shadow-[0_0_25px_rgba(34,197,94,0.4)] transition-all duration-300"
+          >
+            Connect Wallet
+          </Button>
+        )}
+      </div>
+    </nav>
+  );
+}
