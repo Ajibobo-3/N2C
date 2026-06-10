@@ -1,5 +1,6 @@
 import SwapCard from "@/components/SwapCard";
 import TransactionHistory from "@/components/TransactionHistory";
+import WalletDashboard from "@/components/WalletDashboard";
 
 export default function Home() {
   return (
@@ -16,6 +17,7 @@ export default function Home() {
             </p>
           </div>
           
+          <WalletDashboard />
           <SwapCard />
         </div>
 
