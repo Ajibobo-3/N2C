@@ -219,21 +219,31 @@ export default function SwapCard() {
       }
 
       // 2. Open Paystack popup using the inline script
-      const PaystackPop = (window as unknown as { PaystackPop?: { setup: (config: Record<string, unknown>) => { openIframe: () => void } } }).PaystackPop;
+      interface PaystackPopInstance {
+        resumeTransaction: (
+          accessCode: string,
+          options: {
+            onSuccess?: (transaction: { reference: string }) => void | Promise<void>;
+            onCancel?: () => void;
+          }
+        ) => void;
+      }
       
-      if (!PaystackPop) {
+      const PaystackPopConstructor = (window as unknown as { PaystackPop?: new () => PaystackPopInstance }).PaystackPop;
+      
+      if (!PaystackPopConstructor) {
         // Fallback: redirect to authorization URL
         window.location.href = initData.authorization_url;
         return;
       }
 
-      const handler = PaystackPop.setup({
-        access_code: initData.access_code,
-        onClose: () => {
+      const popup = new PaystackPopConstructor();
+      popup.resumeTransaction(initData.access_code, {
+        onCancel: () => {
           console.log("[Paystack] Popup closed by user.");
           setIsInitializingPaystack(false);
         },
-        callback: async (response: { reference: string }) => {
+        onSuccess: async (response: { reference: string }) => {
           console.log("[Paystack] Payment callback:", response.reference);
           setIsInitializingPaystack(false);
 
@@ -259,8 +269,6 @@ export default function SwapCard() {
           }
         },
       });
-
-      handler.openIframe();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "An unexpected error occurred.";
       alert(`Paystack Error: ${message}`);
