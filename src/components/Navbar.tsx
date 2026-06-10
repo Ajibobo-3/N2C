@@ -41,8 +41,23 @@ export default function Navbar() {
   if (!mounted) {
     return (
       <nav className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-black">
-        <div className="text-xl font-bold tracking-wider text-green-500">N2C On-Ramp</div>
-        <div>
+        <div className="flex items-center gap-3">
+          <div className="text-xl font-bold tracking-wider text-orange-500">N2C On-Ramp</div>
+          {/* Live Trust Status Node */}
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/50 border border-emerald-800 text-[10px] text-emerald-400 font-medium tracking-wide uppercase">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Systems Operational
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <a 
+            href="https://wa.me/2349016237901"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-zinc-400 hover:text-white border border-zinc-800 rounded-md px-2.5 py-1.5 transition-colors bg-zinc-950/40"
+          >
+            Get Help / Support
+          </a>
           <Button disabled className="bg-zinc-900 border-zinc-800 text-zinc-500 w-[160px]">
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             Loading...
@@ -54,9 +69,25 @@ export default function Navbar() {
 
   return (
     <nav className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-black">
-      <div className="text-xl font-bold tracking-wider text-green-500">N2C On-Ramp</div>
+      <div className="flex items-center gap-3">
+        <div className="text-xl font-bold tracking-wider text-orange-500">N2C On-Ramp</div>
+        {/* Live Trust Status Node */}
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/50 border border-emerald-800 text-[10px] text-emerald-400 font-medium tracking-wide uppercase">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          Systems Operational
+        </div>
+      </div>
       
-      <div>
+      <div className="flex items-center gap-4">
+        <a 
+          href="https://wa.me/2349016237901"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-zinc-400 hover:text-white border border-zinc-800 rounded-md px-2.5 py-1.5 transition-colors bg-zinc-950/40"
+        >
+          Get Help / Support
+        </a>
+
         {!ready ? (
           <Button disabled className="bg-zinc-900 border-zinc-800 text-zinc-500 w-[160px]">
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
