@@ -208,7 +208,7 @@ export default function SwapCard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transaction_id: transaction.txId,
-          email: user.email?.address || user.google?.email || `${user.id}@n2c.app`,
+          email: user.email?.address || user.google?.email || `${user.id.replace(/[^a-zA-Z0-9]/g, '-')}@n2c.app`,
         }),
       });
 
