@@ -98,7 +98,6 @@ export async function POST(req: NextRequest) {
       .from("transactions")
       .update({
         provider_reference: paystackRef,
-        updated_at: new Date().toISOString(),
       })
       .eq("id", transaction_id);
 

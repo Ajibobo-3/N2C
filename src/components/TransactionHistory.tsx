@@ -24,9 +24,9 @@ interface TransactionRow {
   id: string;
   ngn_amount: number;
   crypto_amount: number;
-  network: string | null;
+  network?: string | null;
   status: string;
-  onchain_tx_hash: string | null;
+  tx_hash: string | null;
   created_at: string;
 }
 
@@ -91,7 +91,7 @@ export default function TransactionHistory() {
     try {
       const { data, error } = await supabaseBrowser
         .from("transactions")
-        .select("id, ngn_amount, crypto_amount, network, status, onchain_tx_hash, created_at")
+        .select("id, ngn_amount, crypto_amount, status, tx_hash, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -261,9 +261,9 @@ export default function TransactionHistory() {
 
                     {/* Explorer Link */}
                     <TableCell className="text-right">
-                      {tx.onchain_tx_hash ? (
+                      {tx.tx_hash ? (
                         <a
-                          href={getExplorerUrl(tx.network, tx.onchain_tx_hash)}
+                          href={getExplorerUrl(tx.network || "base", tx.tx_hash)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-xs text-primary/80 hover:text-primary transition-colors"

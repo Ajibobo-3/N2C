@@ -86,9 +86,8 @@ export async function executeCryptoFulfillment(
     const { error } = await supabase
       .from("transactions")
       .update({
-        onchain_tx_hash: onchainTxHash,
+        tx_hash: onchainTxHash,
         status: "fulfilled",
-        updated_at: new Date().toISOString(),
       })
       .eq("id", txId);
 
@@ -227,7 +226,6 @@ async function markFulfillmentFailed(txId: string, reason: string): Promise<void
     .from("transactions")
     .update({
       status: "fulfillment_failed",
-      updated_at: new Date().toISOString(),
     })
     .eq("id", txId);
 

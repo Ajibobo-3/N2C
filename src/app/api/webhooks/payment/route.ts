@@ -104,7 +104,6 @@ export async function POST(req: NextRequest) {
       .from("transactions")
       .update({
         status: "completed",
-        updated_at: new Date().toISOString(),
       })
       .eq("id", transactionReference)
       .select()
