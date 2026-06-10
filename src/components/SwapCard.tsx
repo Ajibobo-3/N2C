@@ -219,11 +219,6 @@ export default function SwapCard() {
       }
 
       // 2. Open Paystack popup using the inline script
-      const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-      if (!publicKey) {
-        throw new Error("Paystack public key is not configured.");
-      }
-
       const PaystackPop = (window as unknown as { PaystackPop?: { setup: (config: Record<string, unknown>) => { openIframe: () => void } } }).PaystackPop;
       
       if (!PaystackPop) {
@@ -233,11 +228,7 @@ export default function SwapCard() {
       }
 
       const handler = PaystackPop.setup({
-        key: publicKey,
-        email: user.email?.address || user.google?.email || `${user.id}@n2c.app`,
-        amount: Math.round(Number(ngnAmount) * 100), // kobo
-        currency: "NGN",
-        ref: initData.reference,
+        access_code: initData.access_code,
         onClose: () => {
           console.log("[Paystack] Popup closed by user.");
           setIsInitializingPaystack(false);
