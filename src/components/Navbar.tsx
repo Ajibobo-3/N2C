@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy, useExportWallet } from '@privy-io/react-auth';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
 export default function Navbar() {
   const { ready, authenticated, user, login, logout } = usePrivy();
+  const { exportWallet } = useExportWallet();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -83,6 +84,15 @@ export default function Navbar() {
         >
           Contact Support (Email)
         </a>
+
+        {ready && authenticated && (
+          <button
+            onClick={exportWallet}
+            className="text-xs text-orange-500/90 hover:text-orange-400 border border-orange-950 bg-orange-950/20 rounded-md px-2.5 py-1.5 transition-colors font-semibold"
+          >
+            🛡️ Export Private Key
+          </button>
+        )}
 
         {!ready ? (
           <Button disabled className="bg-zinc-900 border-zinc-800 text-zinc-500 w-[160px]">
