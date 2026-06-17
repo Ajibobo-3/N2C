@@ -76,9 +76,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <PrivyProvider
         appId={appId}
         config={{
+          // Enforce rigorous identity capture — email & SMS only
+          loginMethods: ['email', 'sms'],
           appearance: {
             theme: "dark",
-            accentColor: "#22c55e",
+            accentColor: "#f97316", // N2C Orange
+            logo: 'https://n2c-app.vercel.app/logo.png',
           },
           embeddedWallets: {
             ethereum: {

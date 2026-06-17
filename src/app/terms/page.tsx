@@ -19,7 +19,12 @@ export default function TermsPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-white mb-2">3. Account Integrity & Custom Identity</h2>
-          <p>Authentication is completed securely via Privy. You are solely responsible for maintaining the security of your linked authentication methods (e.g., Google account or phone number) which secure access to your embedded, cryptographic self-custodial wallet layout.</p>
+          <p>Authentication is completed securely via Privy using verified email addresses or verified SMS phone numbers. You are solely responsible for maintaining the security of your linked authentication methods which secure access to your embedded, cryptographic self-custodial wallet layout.</p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold text-white mb-2">4. Dispute Resolution & Support</h2>
+          <p>For any deposit anomalies, delayed confirmations, or transaction reconciliation queries, users must open an official ticket by contacting us directly via our dedicated support gateway at <a href="mailto:support@n2c-app.com" className="text-orange-400 hover:text-orange-300 underline underline-offset-2 transition-colors">support@n2c-app.com</a> before engaging external platform dispute paths. We aim to respond to all queries within 24 hours on business days.</p>
         </section>
       </div>
     </div>

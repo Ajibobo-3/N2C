@@ -51,12 +51,10 @@ export default function Navbar() {
         </div>
         <div className="flex items-center gap-4">
           <a 
-            href="https://wa.me/2349016237901"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-zinc-400 hover:text-white border border-zinc-800 rounded-md px-2.5 py-1.5 transition-colors bg-zinc-950/40"
+            href="mailto:support@n2c-app.com"
+            className="text-xs text-zinc-400 hover:text-white border border-zinc-800 rounded-md px-2.5 py-1.5 transition-colors bg-zinc-950/40 font-medium"
           >
-            Get Help / Support
+            Contact Support (Email)
           </a>
           <Button disabled className="bg-zinc-900 border-zinc-800 text-zinc-500 w-[160px]">
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -80,12 +78,10 @@ export default function Navbar() {
       
       <div className="flex items-center gap-4">
         <a 
-          href="https://wa.me/2349016237901"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-zinc-400 hover:text-white border border-zinc-800 rounded-md px-2.5 py-1.5 transition-colors bg-zinc-950/40"
+          href="mailto:support@n2c-app.com"
+          className="text-xs text-zinc-400 hover:text-white border border-zinc-800 rounded-md px-2.5 py-1.5 transition-colors bg-zinc-950/40 font-medium"
         >
-          Get Help / Support
+          Contact Support (Email)
         </a>
 
         {!ready ? (
