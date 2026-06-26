@@ -2,12 +2,6 @@
   "version": 2,
   "framework": "nextjs",
   "regions": ["cdg1"],
-  "crons": [
-    {
-      "path": "/api/cron/fulfill-stale",
-      "schedule": "*/10 * * * *"
-    }
-  ],
   "headers": [
     {
       "source": "/api/(.*)",
