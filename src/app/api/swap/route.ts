@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import {
+  checkDailyLimit,
+  MIN_TRANSACTION_NGN,
+  MAX_TRANSACTION_NGN,
+} from "@/lib/fraud-guard";
 
 // Configuration Constants
 const MOCK_BASE_RATE = 1500; // 1 USDC = 1500 NGN
@@ -10,7 +15,12 @@ const ZENDFI_API_KEY = process.env.ZENDFI_API_KEY || "";
 /**
  * POST /api/swap
  * Secure Quote & Account Generation Service
- * 
+ *
+ * Hardened with:
+ * - Per-transaction min/max amount validation
+ * - Daily cumulative transaction ceiling (₦200,000/user/day)
+ * - User block check
+ *
  * Receives swap details from the frontend, calculates the convenience spread,
  * provisions a dynamic virtual bank account via ZendFi infrastructure API,
  * and tracks the pending transaction in Supabase.
@@ -33,9 +43,53 @@ export async function POST(req: NextRequest) {
     }
 
     const inputAmount = Number(ngn_amount);
-    
-    // 2. Programmatic Spread & Crypto Payout Calculation
-    // We apply our 1.8% convenience fee to the raw NGN input.
+
+    // ──────────────────────────────────────────────────────────────
+    // 2. GUARDRAIL: Per-transaction amount bounds
+    // ──────────────────────────────────────────────────────────────
+    if (inputAmount < MIN_TRANSACTION_NGN) {
+      return NextResponse.json(
+        {
+          error: `Minimum transaction amount is ₦${MIN_TRANSACTION_NGN.toLocaleString()}.`,
+          min_amount: MIN_TRANSACTION_NGN,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (inputAmount > MAX_TRANSACTION_NGN) {
+      return NextResponse.json(
+        {
+          error: `Maximum single transaction amount is ₦${MAX_TRANSACTION_NGN.toLocaleString()}.`,
+          max_amount: MAX_TRANSACTION_NGN,
+        },
+        { status: 400 }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 3. GUARDRAIL: Daily cumulative limit & user block check
+    // ──────────────────────────────────────────────────────────────
+    const limitCheck = await checkDailyLimit(supabase, user_id, inputAmount);
+
+    if (!limitCheck.allowed) {
+      console.warn(
+        `[Swap] Daily limit exceeded for user ${user_id}: ` +
+        `spent=₦${limitCheck.spent.toLocaleString()}, limit=₦${limitCheck.limit.toLocaleString()}, ` +
+        `requested=₦${inputAmount.toLocaleString()}`
+      );
+      return NextResponse.json(
+        {
+          error: `Daily transaction limit exceeded. You have ₦${limitCheck.remaining.toLocaleString()} remaining today out of your ₦${limitCheck.limit.toLocaleString()} daily limit.`,
+          spent: limitCheck.spent,
+          limit: limitCheck.limit,
+          remaining: limitCheck.remaining,
+        },
+        { status: 429 }
+      );
+    }
+
+    // 4. Programmatic Spread & Crypto Payout Calculation
     const feeCharged = inputAmount * SPREAD_PERCENTAGE;
     const effectiveNgn = inputAmount - feeCharged;
     const cryptoPayout = effectiveNgn / MOCK_BASE_RATE;
@@ -47,7 +101,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Try ZendFi first — provision a dynamic virtual bank account
+    // 5. Try ZendFi first — provision a dynamic virtual bank account
     let zendfiSuccess = false;
     let providerData: { data: { account_number: string; bank_name: string; account_name: string } } | null = null;
 
@@ -80,7 +134,7 @@ export async function POST(req: NextRequest) {
       console.warn("[Swap] ZendFi API key not configured — falling back to Paystack.");
     }
 
-    // 4. Determine provider and insert into Supabase
+    // 6. Determine provider and insert into Supabase
     const paymentProvider = zendfiSuccess ? "zendfi" : "paystack";
 
     const insertPayload: Record<string, unknown> = {
@@ -114,9 +168,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. Return response — shape depends on provider
+    // 7. Return response — shape depends on provider
     if (zendfiSuccess && providerData) {
-      // ZendFi flow — frontend shows virtual bank account UI
       return NextResponse.json({
         success: true,
         provider: "zendfi",
@@ -128,7 +181,6 @@ export async function POST(req: NextRequest) {
         fee_charged: txRecord.fee_charged,
       });
     } else {
-      // Paystack fallback — frontend shows "Pay with Paystack" button
       return NextResponse.json({
         success: true,
         provider: "paystack",

@@ -2,20 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { supabase } from "@/lib/supabase";
 import { executeCryptoFulfillment } from "@/lib/fulfillment";
+import { validateWebhookSender, flagFraud } from "@/lib/fraud-guard";
 
 const WEBHOOK_SECRET = process.env.PROVIDER_WEBHOOK_SECRET || "";
 
 /**
  * Computes the expected HMAC-SHA256 digest from the raw request body
  * and compares it against the signature sent in the provider's header.
- * 
- * This prevents malicious actors from spoofing payment.confirmed events
- * and triggering unauthorized Supabase writes or on-chain fulfillments.
+ *
+ * SECURITY: If the secret is not configured, ALL webhooks are REJECTED.
  */
 function verifySignature(rawBody: string, incomingSignature: string): boolean {
   if (!WEBHOOK_SECRET) {
-    console.warn("[Webhook] PROVIDER_WEBHOOK_SECRET is not set — signature verification is disabled in development.");
-    return true; // Allow in dev; in prod this env var MUST be set
+    console.error(
+      "[Payment Webhook] CRITICAL: PROVIDER_WEBHOOK_SECRET is not configured. Rejecting all webhooks."
+    );
+    return false;
   }
 
   const expectedSignature = createHmac("sha256", WEBHOOK_SECRET)
@@ -33,40 +35,56 @@ function verifySignature(rawBody: string, incomingSignature: string): boolean {
 }
 
 /**
+ * Extracts the sender's bank account name from the ZendFi/provider webhook payload.
+ */
+function extractSenderName(data: Record<string, unknown>): string {
+  // ZendFi typically sends sender_account_name or sender.account_name
+  if (typeof data.sender_account_name === "string") {
+    return data.sender_account_name;
+  }
+
+  const sender = data.sender as Record<string, unknown> | undefined;
+  if (sender && typeof sender.account_name === "string") {
+    return sender.account_name;
+  }
+
+  // Fallback: check for account_name at top level
+  if (typeof data.account_name === "string") {
+    return data.account_name;
+  }
+
+  return "";
+}
+
+/**
  * POST /api/webhooks/payment
- * 
+ *
  * Hardened Payment Confirmation Webhook Handler
- * 
- * 1. Extracts the raw body text BEFORE JSON parsing (required for HMAC).
- * 2. Validates the cryptographic signature from the x-webhook-signature header.
- * 3. Rejects unauthorized payloads with a strict 401 — no DB writes occur.
- * 4. On valid payment.confirmed events, marks the transaction as completed
- *    and kicks off the multi-chain fulfillment engine.
+ *
+ * Security features:
+ * - HMAC-SHA256 signature verification (REJECTS if secret is missing)
+ * - Atomic idempotency guard (prevents double-payout race condition)
+ * - Sender name verification against registered KYC legal name
+ * - Fraud flagging with admin alerts on mismatch
  */
 export async function POST(req: NextRequest) {
   try {
-    // ──────────────────────────────────────────────────────────────
     // 1. Read the raw body as text for HMAC computation
-    // ──────────────────────────────────────────────────────────────
     const rawBody = await req.text();
 
-    // ──────────────────────────────────────────────────────────────
     // 2. Cryptographic Signature Verification
-    // ──────────────────────────────────────────────────────────────
     const incomingSignature = req.headers.get("x-webhook-signature") || "";
 
     if (!verifySignature(rawBody, incomingSignature)) {
-      console.error("[Webhook] Signature verification FAILED — potential spoofing attempt.");
+      console.error("[Payment Webhook] Signature verification FAILED — potential spoofing attempt.");
       return NextResponse.json(
         { error: "Unauthorized. Invalid webhook signature." },
         { status: 401 }
       );
     }
 
-    // ──────────────────────────────────────────────────────────────
     // 3. Parse the verified body
-    // ──────────────────────────────────────────────────────────────
-    let payload: { event?: string; data?: { reference?: string } };
+    let payload: { event?: string; data?: Record<string, unknown> & { reference?: string } };
     try {
       payload = JSON.parse(rawBody);
     } catch {
@@ -85,60 +103,72 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ──────────────────────────────────────────────────────────────
     // 4. Event Type Filtering
-    // ──────────────────────────────────────────────────────────────
     if (event !== "payment.confirmed") {
-      // Acknowledge receipt of non-actionable events so the provider
-      // does not keep retrying them.
       return NextResponse.json({ received: true, ignored: true });
     }
 
     const transactionReference = data.reference;
-    console.log(`[Webhook] ✓ Verified. Processing confirmed payment: ${transactionReference}`);
+    console.log(`[Payment Webhook] ✓ Verified. Processing confirmed payment: ${transactionReference}`);
 
-    // ──────────────────────────────────────────────────────────────
-    // 5. Update the Supabase ledger row to "completed"
-    // ──────────────────────────────────────────────────────────────
-    const { data: updatedTx, error: updateError } = await supabase
+    // 5. ATOMIC idempotency guard — claim the transaction with a single atomic update.
+    //    Only succeeds if the current status is 'pending'. Prevents double-payout.
+    const { data: claimedTx, error: claimError } = await supabase
       .from("transactions")
-      .update({
-        status: "completed",
-      })
+      .update({ status: "completed" })
       .eq("id", transactionReference)
+      .eq("status", "pending")
       .select()
       .single();
 
-    if (updateError || !updatedTx) {
-      console.error("[Webhook] Supabase Update Error:", updateError);
-      return NextResponse.json(
-        { error: "Transaction record not found or update failed." },
-        { status: 404 }
+    if (claimError || !claimedTx) {
+      console.log(
+        `[Payment Webhook] Transaction ${transactionReference} not found or already processed. Skipping.`
       );
+      return NextResponse.json({ success: true, already_processed: true });
     }
 
-    console.log(`[Webhook] ✓ Transaction ${updatedTx.id} marked completed. Initiating fulfillment.`);
+    // 6. ANTI-FRAUD: Sender name verification
+    const senderName = extractSenderName(data);
+    if (senderName) {
+      const validation = await validateWebhookSender(supabase, claimedTx.id, senderName);
 
-    // ──────────────────────────────────────────────────────────────
-    // 6. Trigger the On-Chain Fulfillment Engine (fire-and-forget)
-    //    The fulfillment function writes the on-chain hash back to
-    //    Supabase independently. We do not block the webhook response.
-    // ──────────────────────────────────────────────────────────────
-    const targetNetwork = (updatedTx.network as "base" | "solana") || "base";
+      if (!validation.valid) {
+        console.warn(`[Payment Webhook] 🚨 FRAUD DETECTED for tx ${claimedTx.id}: ${validation.reason}`);
+        await flagFraud(supabase, claimedTx.id, "SENDER_NAME_MISMATCH", {
+          sender_name: senderName,
+          reason: validation.reason,
+          provider_reference: transactionReference,
+        });
+        // Acknowledge to provider (200) but DO NOT fulfill
+        return NextResponse.json({ success: true, fraud_flagged: true });
+      }
+    }
 
-    executeCryptoFulfillment(
-      updatedTx.id,
-      updatedTx.wallet_address,
-      Number(updatedTx.crypto_amount),
-      targetNetwork
-    ).catch((err) => {
-      console.error(`[Webhook] Fulfillment failed for tx ${updatedTx.id}:`, err);
-    });
+    console.log(`[Payment Webhook] ✓ Transaction ${claimedTx.id} marked completed. Initiating fulfillment.`);
 
-    return NextResponse.json({ success: true, settled_id: updatedTx.id });
+    // 7. Fulfillment with error handling
+    const targetNetwork = (claimedTx.network as "base" | "solana") || "base";
+
+    try {
+      await executeCryptoFulfillment(
+        claimedTx.id,
+        claimedTx.wallet_address,
+        Number(claimedTx.crypto_amount),
+        targetNetwork
+      );
+    } catch (err) {
+      console.error(`[Payment Webhook] Fulfillment failed for tx ${claimedTx.id}:`, err);
+      await supabase
+        .from("transactions")
+        .update({ status: "fulfillment_failed" })
+        .eq("id", claimedTx.id);
+    }
+
+    return NextResponse.json({ success: true, settled_id: claimedTx.id });
 
   } catch (error) {
-    console.error("[Webhook] Processing Error:", error);
+    console.error("[Payment Webhook] Processing Error:", error);
     return NextResponse.json(
       { error: "Internal Server Error during webhook processing." },
       { status: 500 }
